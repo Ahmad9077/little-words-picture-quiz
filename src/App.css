@@ -1,4 +1,6 @@
 .app-shell {
+  display: flex;
+  flex-direction: column;
   width: min(1120px, calc(100% - 32px));
   min-height: 100svh;
   margin: 0 auto;
@@ -273,50 +275,90 @@
 @media (max-width: 820px) {
   .app-shell {
     width: min(100% - 20px, 560px);
-    padding-top: 16px;
+    height: 100svh;
+    min-height: 100svh;
+    overflow: hidden;
+    padding: 10px 0 12px;
+  }
+
+  .topbar {
+    gap: 12px;
+    padding-bottom: 8px;
+  }
+
+  .eyebrow {
+    display: none;
   }
 
   .topbar h1 {
-    font-size: 2.2rem;
+    font-size: 1.55rem;
+    line-height: 1;
+  }
+
+  .icon-button {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+    box-shadow: 0 5px 0 var(--shadow-line);
   }
 
   .quiz-stage {
     grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, auto) minmax(0, auto);
+    gap: 8px;
+    min-height: 0;
   }
 
   .picture-panel,
   .choice-panel {
     min-height: unset;
-    padding: 14px;
+    padding: 8px;
+    box-shadow: 0 5px 0 var(--shadow-line);
   }
 
   .picture-frame {
-    min-height: 255px;
+    min-height: 0;
+    height: clamp(165px, 31svh, 230px);
   }
 
   .object-emoji {
-    font-size: clamp(8.5rem, 44vw, 13rem);
+    font-size: clamp(7rem, 34vw, 10.5rem);
   }
 
   .sound-button {
-    min-height: 56px;
-    margin-top: 12px;
+    min-height: 44px;
+    margin-top: 8px;
+    box-shadow: 0 5px 0 var(--shadow-line);
+    font-size: 1rem;
   }
 
   .choice-grid {
-    gap: 10px;
+    gap: 8px;
   }
 
   .choice-button {
-    min-height: 104px;
-    font-size: clamp(2.25rem, 13vw, 4.1rem);
+    min-height: clamp(62px, 10.5svh, 88px);
+    box-shadow: 0 5px 0 var(--shadow-line);
+    font-size: clamp(1.9rem, 10vw, 3.4rem);
   }
 
   .feedback {
     grid-template-columns: 1fr auto;
+    min-height: 54px;
+    padding: 6px 8px;
   }
 
-  .feedback .primary-button {
-    grid-column: 1 / -1;
+  .feedback strong {
+    font-size: 0.9rem;
+  }
+
+  .feedback span {
+    font-size: 1.1rem;
+  }
+
+  .primary-button {
+    min-height: 42px;
+    padding: 0 14px;
+    box-shadow: 0 5px 0 var(--shadow-line);
   }
 }

@@ -7,7 +7,7 @@ export type QuizQuestion = {
   choices: string[]
 }
 
-const SESSION_SIZE = 14
+const SESSION_SIZE = 15
 
 const shuffle = <T,>(items: T[]) => {
   const copy = [...items]
