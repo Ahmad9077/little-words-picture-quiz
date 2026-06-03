@@ -1,0 +1,51 @@
+:root {
+  --paper: #fffdf8;
+  --cream: #f7eedb;
+  --mint: #d8f0dc;
+  --teal: #2aa7a2;
+  --teal-800: #14696c;
+  --coral: #ef6f61;
+  --gold: #f4c542;
+  --green: #82d173;
+  --ink: #202733;
+  --muted: #667085;
+  --line: #202733;
+  --shadow-line: rgba(32, 39, 51, 0.18);
+  font-family:
+    Inter, ui-rounded, 'Avenir Next', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    sans-serif;
+  color: var(--ink);
+  background:
+    linear-gradient(90deg, rgba(32, 39, 51, 0.05) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(32, 39, 51, 0.05) 1px, transparent 1px),
+    var(--cream);
+  background-size: 44px 44px;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100svh;
+  margin: 0;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible {
+  outline: 4px solid rgba(42, 167, 162, 0.35);
+  outline-offset: 3px;
+}
+
+#root {
+  min-height: 100svh;
+}
