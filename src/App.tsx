@@ -1,19 +1,12 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, BadgeCheck, RotateCcw, Volume2 } from 'lucide-react'
 import './App.css'
 import { ObjectPicture } from './components/ObjectPicture'
-import { createQuiz, type QuizMode } from './lib/quiz'
+import { createQuiz } from './lib/quiz'
 import type { AnswerRecord } from './types'
 
-const modeLabels: Record<QuizMode, string> = {
-  all: 'All',
-  three: '3',
-  four: '4',
-}
-
 function App() {
-  const [mode, setMode] = useState<QuizMode>('all')
   const [questions, setQuestions] = useState(() => createQuiz('all'))
   const [currentIndex, setCurrentIndex] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
@@ -22,13 +15,11 @@ function App() {
   const nextButtonRef = useRef<HTMLButtonElement | null>(null)
   const current = questions[currentIndex]
   const correctCount = answers.filter((answer) => answer.selected === answer.question.item.word).length
-  const answeredCount = answers.length
   const isComplete = currentIndex >= questions.length
   const isCorrect = selected === current?.item.word
 
-  const restart = (nextMode = mode) => {
-    setMode(nextMode)
-    setQuestions(createQuiz(nextMode))
+  const restart = () => {
+    setQuestions(createQuiz('all'))
     setCurrentIndex(0)
     setSelected(null)
     setAnswers([])
@@ -81,56 +72,6 @@ function App() {
         </button>
       </header>
 
-      <section className="control-row" aria-label="Letter mode">
-        {(Object.keys(modeLabels) as QuizMode[]).map((option) => (
-          <button
-            key={option}
-            className={`mode-button ${mode === option ? 'is-active' : ''}`}
-            type="button"
-            aria-pressed={mode === option}
-            onClick={() => restart(option)}
-          >
-            <span>{modeLabels[option]}</span>
-            <small>{option === 'all' ? 'words' : 'letters'}</small>
-          </button>
-        ))}
-      </section>
-
-      <section className="score-strip" aria-label="Quiz progress">
-        <div>
-          <strong>{Math.min(answeredCount + 1, questions.length)}</strong>
-          <span>of {questions.length}</span>
-        </div>
-        <div>
-          <strong>{correctCount}</strong>
-          <span>right</span>
-        </div>
-        <div>
-          <strong>{questions.length - answeredCount}</strong>
-          <span>left</span>
-        </div>
-      </section>
-
-      <div
-        className="progress-dots"
-        style={{ '--dot-count': questions.length } as CSSProperties}
-        aria-hidden="true"
-      >
-        {questions.map((question, index) => {
-          const record = answers[index]
-          const state =
-            index === currentIndex && !isComplete
-              ? 'is-current'
-              : record
-                ? record.selected === question.item.word
-                  ? 'is-right'
-                  : 'is-wrong'
-                : ''
-
-          return <span key={question.item.id} className={state} />
-        })}
-      </div>
-
       <AnimatePresence mode="wait">
         {isComplete ? (
           <motion.section
@@ -160,7 +101,7 @@ function App() {
 
                 return (
                   <article className={`review-card ${isAnswerCorrect ? 'is-right' : 'is-wrong'}`} key={record.question.item.id}>
-                    <ObjectPicture item={record.question.item} revealed />
+                    <ObjectPicture item={record.question.item} />
                     <div>
                       <strong>{record.question.item.word}</strong>
                       <span>{isAnswerCorrect ? 'right' : `picked ${record.selected}`}</span>
@@ -180,11 +121,11 @@ function App() {
             transition={{ duration: 0.2 }}
           >
             <section className="picture-panel" aria-label="Picture">
-              <ObjectPicture item={current.item} revealed={Boolean(selected)} />
-              <div className="prompt-line">
-                <span>Pick the word</span>
-                <strong>{current.item.letters} letters</strong>
-              </div>
+              <ObjectPicture item={current.item} />
+              <button className="sound-button" type="button" onClick={() => speak(current.item.word)}>
+                <Volume2 aria-hidden="true" size={28} />
+                Hear word
+              </button>
             </section>
 
             <section className="choice-panel" aria-label="Answer choices">
@@ -222,16 +163,13 @@ function App() {
                       <strong>{isCorrect ? 'Yes' : 'The word was'}</strong>
                       <span>{current.item.word}</span>
                     </div>
-                    <button className="icon-button" type="button" onClick={() => speak(current.item.word)} aria-label="Hear word">
-                      <Volume2 aria-hidden="true" size={22} />
-                    </button>
                     <button className="primary-button" type="button" onClick={nextQuestion} ref={nextButtonRef}>
                       Next
                       <ArrowRight aria-hidden="true" size={20} />
                     </button>
                   </>
                 ) : (
-                  <span aria-hidden="true">Select one word</span>
+                  <span aria-hidden="true" />
                 )}
               </div>
             </section>
