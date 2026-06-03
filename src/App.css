@@ -275,10 +275,18 @@
 @media (max-width: 820px) {
   .app-shell {
     width: min(100% - 20px, 560px);
+    padding: 10px 0 12px;
+  }
+
+  .app-shell.is-playing {
     height: 100svh;
     min-height: 100svh;
     overflow: hidden;
-    padding: 10px 0 12px;
+  }
+
+  .app-shell.is-results {
+    min-height: 100svh;
+    overflow: visible;
   }
 
   .topbar {

@@ -38,9 +38,14 @@ export const createQuiz = (mode: QuizMode): QuizQuestion[] => {
 
   return questionItems.map((item) => {
     const sameLengthDistractors = wordBank.filter(
-      (candidate) => candidate.word !== item.word && candidate.letters === item.letters,
+      (candidate) =>
+        candidate.word !== item.word &&
+        candidate.letters === item.letters &&
+        candidate.emoji !== item.emoji,
     )
-    const backupDistractors = wordBank.filter((candidate) => candidate.word !== item.word)
+    const backupDistractors = wordBank.filter(
+      (candidate) => candidate.word !== item.word && candidate.emoji !== item.emoji,
+    )
     const distractorPool = sameLengthDistractors.length >= 3 ? sameLengthDistractors : backupDistractors
     const distractors = shuffle(distractorPool)
       .slice(0, 3)

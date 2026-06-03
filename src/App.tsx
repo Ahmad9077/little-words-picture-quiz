@@ -61,7 +61,7 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell ${isComplete ? 'is-results' : 'is-playing'}`}>
       <header className="topbar">
         <div>
           <p className="eyebrow">Little Words</p>
