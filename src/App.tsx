@@ -72,6 +72,29 @@ function App() {
         </button>
       </header>
 
+      {!isComplete ? (
+        <section className="question-indicator" aria-label="Question progress">
+          <strong>
+            {currentIndex + 1} / {questions.length}
+          </strong>
+          <div className="indicator-dots" aria-hidden="true">
+            {questions.map((question, index) => {
+              const answer = answers[index]
+              const state =
+                index === currentIndex
+                  ? 'is-current'
+                  : answer
+                    ? answer.selected === question.item.word
+                      ? 'is-correct'
+                      : 'is-wrong'
+                    : 'is-upcoming'
+
+              return <span className={state} key={question.item.id} />
+            })}
+          </div>
+        </section>
+      ) : null}
+
       <AnimatePresence mode="wait">
         {isComplete ? (
           <motion.section
