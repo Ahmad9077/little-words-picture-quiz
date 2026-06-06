@@ -32,22 +32,20 @@ const itemsForMode = (mode: QuizMode) => {
   return wordBank
 }
 
+const distractorsFor = (item: WordItem) =>
+  wordBank.filter(
+    (candidate) =>
+      candidate.word !== item.word &&
+      candidate.word[0] === item.word[0] &&
+      candidate.emoji !== item.emoji,
+  )
+
 export const createQuiz = (mode: QuizMode): QuizQuestion[] => {
-  const pool = itemsForMode(mode)
+  const pool = itemsForMode(mode).filter((item) => distractorsFor(item).length >= 3)
   const questionItems = shuffle(pool).slice(0, Math.min(SESSION_SIZE, pool.length))
 
   return questionItems.map((item) => {
-    const sameLengthDistractors = wordBank.filter(
-      (candidate) =>
-        candidate.word !== item.word &&
-        candidate.letters === item.letters &&
-        candidate.emoji !== item.emoji,
-    )
-    const backupDistractors = wordBank.filter(
-      (candidate) => candidate.word !== item.word && candidate.emoji !== item.emoji,
-    )
-    const distractorPool = sameLengthDistractors.length >= 3 ? sameLengthDistractors : backupDistractors
-    const distractors = shuffle(distractorPool)
+    const distractors = shuffle(distractorsFor(item))
       .slice(0, 3)
       .map((candidate) => candidate.word)
 
