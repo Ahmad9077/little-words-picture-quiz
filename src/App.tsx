@@ -6,6 +6,20 @@ import { ObjectPicture } from './components/ObjectPicture'
 import { createQuiz } from './lib/quiz'
 import type { AnswerRecord } from './types'
 
+declare global {
+  interface Window {
+    QuizzesHubProgress?: {
+      record: (result: {
+        quizId: string
+        score: number
+        total: number
+        level?: string
+        details?: Record<string, unknown>
+      }) => Promise<{ ok: boolean; reason?: string }>
+    }
+  }
+}
+
 function App() {
   const [questions, setQuestions] = useState(() => createQuiz('all'))
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -47,6 +61,18 @@ function App() {
       nextButtonRef.current?.focus()
     }
   }, [selected])
+
+  useEffect(() => {
+    if (!isComplete) return
+
+    void window.QuizzesHubProgress?.record({
+      quizId: 'picture-reading',
+      score: correctCount,
+      total: questions.length,
+      level: correctCount === questions.length ? 'A+' : correctCount >= Math.ceil(questions.length * 0.7) ? 'A' : 'Practice',
+      details: { answers: answers.map((answer) => ({ word: answer.question.item.word, correct: answer.selected === answer.question.item.word })) }
+    })
+  }, [answers, correctCount, isComplete, questions.length])
 
   const speak = (word: string) => {
     if (!('speechSynthesis' in window)) {
