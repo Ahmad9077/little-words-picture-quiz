@@ -70,7 +70,14 @@ function App() {
       score: correctCount,
       total: questions.length,
       level: correctCount === questions.length ? 'A+' : correctCount >= Math.ceil(questions.length * 0.7) ? 'A' : 'Practice',
-      details: { answers: answers.map((answer) => ({ word: answer.question.item.word, correct: answer.selected === answer.question.item.word })) }
+      details: {
+        answers: answers.map((answer) => ({
+          prompt: answer.question.item.word,
+          expected: answer.question.item.word,
+          selected: answer.selected,
+          correct: answer.selected === answer.question.item.word,
+        })),
+      }
     })
   }, [answers, correctCount, isComplete, questions.length])
 
