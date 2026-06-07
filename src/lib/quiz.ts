@@ -7,7 +7,13 @@ export type QuizQuestion = {
   choices: string[]
 }
 
-const SESSION_SIZE = 15
+type QuizOptions = {
+  choiceCount?: number
+  sessionSize?: number
+}
+
+const DEFAULT_SESSION_SIZE = 15
+const DEFAULT_CHOICE_COUNT = 4
 
 const shuffle = <T,>(items: T[]) => {
   const copy = [...items]
@@ -40,13 +46,15 @@ const distractorsFor = (item: WordItem) =>
       candidate.emoji !== item.emoji,
   )
 
-export const createQuiz = (mode: QuizMode): QuizQuestion[] => {
-  const pool = itemsForMode(mode).filter((item) => distractorsFor(item).length >= 3)
-  const questionItems = shuffle(pool).slice(0, Math.min(SESSION_SIZE, pool.length))
+export const createQuiz = (mode: QuizMode, options: QuizOptions = {}): QuizQuestion[] => {
+  const sessionSize = options.sessionSize || DEFAULT_SESSION_SIZE
+  const choiceCount = options.choiceCount || DEFAULT_CHOICE_COUNT
+  const pool = itemsForMode(mode).filter((item) => distractorsFor(item).length >= choiceCount - 1)
+  const questionItems = shuffle(pool).slice(0, Math.min(sessionSize, pool.length))
 
   return questionItems.map((item) => {
     const distractors = shuffle(distractorsFor(item))
-      .slice(0, 3)
+      .slice(0, choiceCount - 1)
       .map((candidate) => candidate.word)
 
     return {

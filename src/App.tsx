@@ -3,8 +3,16 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, BadgeCheck, RotateCcw, Volume2 } from 'lucide-react'
 import './App.css'
 import { ObjectPicture } from './components/ObjectPicture'
-import { createQuiz } from './lib/quiz'
+import { createQuiz, type QuizMode } from './lib/quiz'
 import type { AnswerRecord } from './types'
+
+type Difficulty = 'easy' | 'medium' | 'hard'
+
+const difficultySettings: Record<Difficulty, { label: string; mode: QuizMode; sessionSize: number; choiceCount: number }> = {
+  easy: { label: 'Easy', mode: 'three', sessionSize: 10, choiceCount: 3 },
+  medium: { label: 'Medium', mode: 'all', sessionSize: 15, choiceCount: 4 },
+  hard: { label: 'Hard', mode: 'four', sessionSize: 20, choiceCount: 4 },
+}
 
 declare global {
   interface Window {
@@ -20,8 +28,13 @@ declare global {
   }
 }
 
-function App() {
-  const [questions, setQuestions] = useState(() => createQuiz('all'))
+type AppProps = {
+  difficulty: Difficulty
+}
+
+function App({ difficulty }: AppProps) {
+  const settings = difficultySettings[difficulty]
+  const [questions, setQuestions] = useState(() => createQuiz(settings.mode, settings))
   const [currentIndex, setCurrentIndex] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
   const [answers, setAnswers] = useState<AnswerRecord[]>([])
@@ -33,7 +46,7 @@ function App() {
   const isCorrect = selected === current?.item.word
 
   const restart = () => {
-    setQuestions(createQuiz('all'))
+    setQuestions(createQuiz(settings.mode, settings))
     setCurrentIndex(0)
     setSelected(null)
     setAnswers([])
@@ -71,6 +84,7 @@ function App() {
       total: questions.length,
       level: correctCount === questions.length ? 'A+' : correctCount >= Math.ceil(questions.length * 0.7) ? 'A' : 'Practice',
       details: {
+        difficulty,
         answers: answers.map((answer) => ({
           prompt: answer.question.item.word,
           expected: answer.question.item.word,
@@ -79,7 +93,7 @@ function App() {
         })),
       }
     })
-  }, [answers, correctCount, isComplete, questions.length])
+  }, [answers, correctCount, difficulty, isComplete, questions.length])
 
   const speak = (word: string) => {
     if (!('speechSynthesis' in window)) {
@@ -97,7 +111,7 @@ function App() {
     <main className={`app-shell ${isComplete ? 'is-results' : 'is-playing'}`}>
       <header className="topbar">
         <div>
-          <p className="eyebrow">Little Words</p>
+          <p className="eyebrow">{settings.label} · Little Words</p>
           <h1>Picture Reading Quiz</h1>
         </div>
         <button className="icon-button" type="button" onClick={() => restart()} aria-label="Restart quiz">
