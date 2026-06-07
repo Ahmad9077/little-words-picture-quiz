@@ -25,6 +25,10 @@ declare global {
         details?: Record<string, unknown>
       }) => Promise<{ ok: boolean; reason?: string }>
     }
+    QuizzesHubAdaptive?: {
+      recordAttempt: (answers: Array<{ question: { key: string }, correct: boolean }>) => Promise<{ ok: boolean; reason?: string }>
+    }
+    QuizzesHubAdaptiveReady?: Promise<unknown>
   }
 }
 
@@ -150,7 +154,7 @@ function App({ difficulty }: AppProps) {
   useEffect(() => {
     if (!isComplete) return
 
-    void window.QuizzesHubProgress?.record({
+    const progressPayload = {
       quizId: 'picture-reading',
       score: correctCount,
       total: questions.length,
@@ -163,8 +167,22 @@ function App({ difficulty }: AppProps) {
           selected: answer.selected,
           correct: answer.selected === answer.question.item.word,
         })),
+      },
+    }
+
+    void (async () => {
+      await window.QuizzesHubAdaptiveReady?.catch(() => null)
+      const adaptiveResult = await window.QuizzesHubAdaptive?.recordAttempt(
+        answers.map((answer) => ({
+          question: { key: answer.question.item.id },
+          correct: answer.selected === answer.question.item.word,
+        })),
+      )
+
+      if (!adaptiveResult?.ok) {
+        await window.QuizzesHubProgress?.record(progressPayload)
       }
-    })
+    })()
   }, [answers, correctCount, difficulty, isComplete, questions.length])
 
   const speak = (word: string) => {
