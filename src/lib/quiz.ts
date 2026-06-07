@@ -9,6 +9,7 @@ export type QuizQuestion = {
 
 type QuizOptions = {
   choiceCount?: number
+  preferredKeys?: string[]
   sessionSize?: number
 }
 
@@ -50,7 +51,12 @@ export const createQuiz = (mode: QuizMode, options: QuizOptions = {}): QuizQuest
   const sessionSize = options.sessionSize || DEFAULT_SESSION_SIZE
   const choiceCount = options.choiceCount || DEFAULT_CHOICE_COUNT
   const pool = itemsForMode(mode).filter((item) => distractorsFor(item).length >= choiceCount - 1)
-  const questionItems = shuffle(pool).slice(0, Math.min(sessionSize, pool.length))
+  const preferredItems = (options.preferredKeys || [])
+    .map((key) => pool.find((item) => item.id === key))
+    .filter((item): item is WordItem => Boolean(item))
+  const preferredIds = new Set(preferredItems.map((item) => item.id))
+  const remainingItems = shuffle(pool.filter((item) => !preferredIds.has(item.id)))
+  const questionItems = [...preferredItems, ...remainingItems].slice(0, Math.min(sessionSize, pool.length))
 
   return questionItems.map((item) => {
     const distractors = shuffle(distractorsFor(item))

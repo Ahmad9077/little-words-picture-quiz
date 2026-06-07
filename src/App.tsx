@@ -28,7 +28,7 @@ declare global {
     QuizzesHubAdaptive?: {
       recordAttempt: (answers: Array<{ question: { key: string }, correct: boolean }>) => Promise<{ ok: boolean; reason?: string }>
     }
-    QuizzesHubAdaptiveReady?: Promise<unknown>
+    QuizzesHubAdaptiveReady?: Promise<{ question_keys?: string[] }>
   }
 }
 
@@ -150,6 +150,23 @@ function App({ difficulty }: AppProps) {
       // Ignore storage failures; the current in-memory session remains valid.
     }
   }, [answers, currentIndex, difficulty, isComplete, questions, selected])
+
+  useEffect(() => {
+    if (savedSession || currentIndex !== 0 || selected || answers.length > 0) return
+
+    let cancelled = false
+
+    void window.QuizzesHubAdaptiveReady?.then((plan) => {
+      const preferredKeys = Array.isArray(plan?.question_keys) ? plan.question_keys : []
+      if (cancelled || preferredKeys.length === 0) return
+
+      setQuestions(createQuiz(settings.mode, { ...settings, preferredKeys }))
+    }).catch(() => null)
+
+    return () => {
+      cancelled = true
+    }
+  }, [answers.length, currentIndex, savedSession, selected, settings])
 
   useEffect(() => {
     if (!isComplete) return
