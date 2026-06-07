@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowRight, BadgeCheck, RotateCcw, Volume2 } from 'lucide-react'
+import { ArrowRight, BadgeCheck, Volume2 } from 'lucide-react'
 import './App.css'
 import { ObjectPicture } from './components/ObjectPicture'
 import { createQuiz, type QuizMode } from './lib/quiz'
@@ -32,12 +32,57 @@ type AppProps = {
   difficulty: Difficulty
 }
 
+type SavedPictureSession = {
+  answers: AnswerRecord[]
+  currentIndex: number
+  difficulty: Difficulty
+  questions: ReturnType<typeof createQuiz>
+  selected: string | null
+  version: 1
+}
+
+const storageKeyFor = (difficulty: Difficulty) => `picture-reading:active-session:${difficulty}:v1`
+
+const loadSavedSession = (difficulty: Difficulty): SavedPictureSession | null => {
+  try {
+    const raw = window.localStorage.getItem(storageKeyFor(difficulty))
+    if (!raw) return null
+
+    const parsed = JSON.parse(raw) as SavedPictureSession
+    if (
+      parsed?.version !== 1 ||
+      parsed.difficulty !== difficulty ||
+      !Array.isArray(parsed.questions) ||
+      parsed.questions.length === 0 ||
+      !Number.isInteger(parsed.currentIndex) ||
+      parsed.currentIndex < 0 ||
+      parsed.currentIndex >= parsed.questions.length ||
+      !Array.isArray(parsed.answers)
+    ) {
+      return null
+    }
+
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+const clearSavedSession = (difficulty: Difficulty) => {
+  try {
+    window.localStorage.removeItem(storageKeyFor(difficulty))
+  } catch {
+    // Ignore storage failures; the quiz can still run in memory.
+  }
+}
+
 function App({ difficulty }: AppProps) {
   const settings = difficultySettings[difficulty]
-  const [questions, setQuestions] = useState(() => createQuiz(settings.mode, settings))
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [selected, setSelected] = useState<string | null>(null)
-  const [answers, setAnswers] = useState<AnswerRecord[]>([])
+  const [savedSession] = useState<SavedPictureSession | null>(() => loadSavedSession(difficulty))
+  const [questions, setQuestions] = useState(() => savedSession?.questions ?? createQuiz(settings.mode, settings))
+  const [currentIndex, setCurrentIndex] = useState(() => savedSession?.currentIndex ?? 0)
+  const [selected, setSelected] = useState<string | null>(() => savedSession?.selected ?? null)
+  const [answers, setAnswers] = useState<AnswerRecord[]>(() => savedSession?.answers ?? [])
   const answerLockedRef = useRef(false)
   const nextButtonRef = useRef<HTMLButtonElement | null>(null)
   const current = questions[currentIndex]
@@ -45,7 +90,8 @@ function App({ difficulty }: AppProps) {
   const isComplete = currentIndex >= questions.length
   const isCorrect = selected === current?.item.word
 
-  const restart = () => {
+  const startNextRound = () => {
+    clearSavedSession(difficulty)
     setQuestions(createQuiz(settings.mode, settings))
     setCurrentIndex(0)
     setSelected(null)
@@ -71,9 +117,35 @@ function App({ difficulty }: AppProps) {
 
   useEffect(() => {
     if (selected) {
+      answerLockedRef.current = true
       nextButtonRef.current?.focus()
+    } else {
+      answerLockedRef.current = false
     }
   }, [selected])
+
+  useEffect(() => {
+    if (isComplete) {
+      clearSavedSession(difficulty)
+      return
+    }
+
+    try {
+      window.localStorage.setItem(
+        storageKeyFor(difficulty),
+        JSON.stringify({
+          answers,
+          currentIndex,
+          difficulty,
+          questions,
+          selected,
+          version: 1,
+        } satisfies SavedPictureSession),
+      )
+    } catch {
+      // Ignore storage failures; the current in-memory session remains valid.
+    }
+  }, [answers, currentIndex, difficulty, isComplete, questions, selected])
 
   useEffect(() => {
     if (!isComplete) return
@@ -114,9 +186,6 @@ function App({ difficulty }: AppProps) {
           <p className="eyebrow">{settings.label} · Little Words</p>
           <h1>Picture Reading Quiz</h1>
         </div>
-        <button className="icon-button" type="button" onClick={() => restart()} aria-label="Restart quiz">
-          <RotateCcw aria-hidden="true" size={22} />
-        </button>
       </header>
 
       {!isComplete ? (
@@ -159,9 +228,9 @@ function App({ difficulty }: AppProps) {
               <p>
                 Score {correctCount} / {questions.length}
               </p>
-              <button className="primary-button" type="button" onClick={() => restart()}>
-                <RotateCcw aria-hidden="true" size={20} />
-                Play again
+              <button className="primary-button" type="button" onClick={startNextRound}>
+                Next round
+                <ArrowRight aria-hidden="true" size={20} />
               </button>
             </div>
 
