@@ -29,7 +29,36 @@ declare global {
       recordAttempt: (answers: Array<{ question: { key: string }, correct: boolean }>) => Promise<{ ok: boolean; reason?: string }>
     }
     QuizzesHubAdaptiveReady?: Promise<{ question_keys?: string[] }>
+    QuizzesHubChallenge?: {
+      active: boolean
+      currentUserId: string | null
+      canAnswer: () => boolean
+      onChange: (listener: (state: ChallengeState) => void) => () => void
+      openHub: () => void
+      submitAnswer: (answer: { answerText: string; isCorrect: boolean }) => Promise<{ ok: boolean; reason?: string }>
+    }
+    QuizzesHubChallengeReady?: Promise<ChallengeState>
   }
+}
+
+type ChallengePlayer = {
+  display_name: string
+  user_id: string
+  wrong_count: number
+}
+
+type ChallengeState = {
+  current_answering_user_id: string | null
+  current_question_key: string | null
+  current_turn_index: number
+  last_turn?: {
+    answering_player_id: string
+    is_correct: boolean
+    question_key: string
+  } | null
+  players: ChallengePlayer[]
+  status: 'waiting' | 'active' | 'finished' | 'abandoned'
+  winner_id: string | null
 }
 
 type AppProps = {
@@ -82,11 +111,14 @@ const clearSavedSession = (difficulty: Difficulty) => {
 
 function App({ difficulty }: AppProps) {
   const settings = difficultySettings[difficulty]
-  const [savedSession] = useState<SavedPictureSession | null>(() => loadSavedSession(difficulty))
-  const [questions, setQuestions] = useState(() => savedSession?.questions ?? createQuiz(settings.mode, settings))
+  const isChallengeMode = Boolean(window.QuizzesHubChallenge?.active)
+  const [savedSession] = useState<SavedPictureSession | null>(() => isChallengeMode ? null : loadSavedSession(difficulty))
+  const [questions, setQuestions] = useState(() => savedSession?.questions ?? (isChallengeMode ? [] : createQuiz(settings.mode, settings)))
   const [currentIndex, setCurrentIndex] = useState(() => savedSession?.currentIndex ?? 0)
   const [selected, setSelected] = useState<string | null>(() => savedSession?.selected ?? null)
   const [answers, setAnswers] = useState<AnswerRecord[]>(() => savedSession?.answers ?? [])
+  const [challengeState, setChallengeState] = useState<ChallengeState | null>(null)
+  const [challengeError, setChallengeError] = useState<string | null>(null)
   const answerLockedRef = useRef(false)
   const nextButtonRef = useRef<HTMLButtonElement | null>(null)
   const current = questions[currentIndex]
@@ -95,6 +127,11 @@ function App({ difficulty }: AppProps) {
   const isCorrect = selected === current?.item.word
 
   const startNextRound = () => {
+    if (isChallengeMode) {
+      window.QuizzesHubChallenge?.openHub()
+      return
+    }
+
     clearSavedSession(difficulty)
     setQuestions(createQuiz(settings.mode, settings))
     setCurrentIndex(0)
@@ -108,27 +145,52 @@ function App({ difficulty }: AppProps) {
       return
     }
 
+    if (isChallengeMode && !window.QuizzesHubChallenge?.canAnswer()) {
+      return
+    }
+
     answerLockedRef.current = true
     setSelected(choice)
     setAnswers((value) => [...value, { question: current, selected: choice }])
+
+    if (isChallengeMode) {
+      void window.QuizzesHubChallenge?.submitAnswer({
+        answerText: choice,
+        isCorrect: choice === current.item.word,
+      }).then((result) => {
+        if (!result?.ok) {
+          setChallengeError(result?.reason || 'Could not submit answer.')
+          answerLockedRef.current = false
+        }
+      })
+    }
   }
 
   const nextQuestion = () => {
+    if (isChallengeMode) {
+      window.QuizzesHubChallenge?.openHub()
+      return
+    }
+
     answerLockedRef.current = false
     setSelected(null)
     setCurrentIndex((value) => value + 1)
   }
 
   useEffect(() => {
+    if (isChallengeMode) return
+
     if (selected) {
       answerLockedRef.current = true
       nextButtonRef.current?.focus()
     } else {
       answerLockedRef.current = false
     }
-  }, [selected])
+  }, [isChallengeMode, selected])
 
   useEffect(() => {
+    if (isChallengeMode) return
+
     if (isComplete) {
       clearSavedSession(difficulty)
       return
@@ -149,9 +211,10 @@ function App({ difficulty }: AppProps) {
     } catch {
       // Ignore storage failures; the current in-memory session remains valid.
     }
-  }, [answers, currentIndex, difficulty, isComplete, questions, selected])
+  }, [answers, currentIndex, difficulty, isChallengeMode, isComplete, questions, selected])
 
   useEffect(() => {
+    if (isChallengeMode) return
     if (savedSession || currentIndex !== 0 || selected || answers.length > 0) return
 
     let cancelled = false
@@ -166,9 +229,10 @@ function App({ difficulty }: AppProps) {
     return () => {
       cancelled = true
     }
-  }, [answers.length, currentIndex, savedSession, selected, settings])
+  }, [answers.length, currentIndex, isChallengeMode, savedSession, selected, settings])
 
   useEffect(() => {
+    if (isChallengeMode) return
     if (!isComplete) return
 
     const progressPayload = {
@@ -200,7 +264,55 @@ function App({ difficulty }: AppProps) {
         await window.QuizzesHubProgress?.record(progressPayload)
       }
     })()
-  }, [answers, correctCount, difficulty, isComplete, questions.length])
+  }, [answers, correctCount, difficulty, isChallengeMode, isComplete, questions.length])
+
+  useEffect(() => {
+    if (!isChallengeMode) return
+
+    let unsubscribe: (() => void) | undefined
+    let cancelled = false
+
+    const applyChallengeState = (state: ChallengeState) => {
+      if (cancelled) return
+      setChallengeState(state)
+      setChallengeError(null)
+      setSelected(null)
+      setAnswers([])
+      answerLockedRef.current = false
+
+      if (state.status !== 'active' || !state.current_question_key) {
+        setQuestions([])
+        return
+      }
+
+      const nextQuestion = createQuiz('all', {
+        choiceCount: 4,
+        preferredKeys: [state.current_question_key],
+        sessionSize: 1,
+      })[0]
+
+      if (!nextQuestion || nextQuestion.item.id !== state.current_question_key) {
+        setQuestions([])
+        setChallengeError('This challenge question is not available in this quiz version.')
+        return
+      }
+
+      setCurrentIndex(0)
+      setQuestions([nextQuestion])
+    }
+
+    void window.QuizzesHubChallengeReady?.then((state) => {
+      applyChallengeState(state)
+      unsubscribe = window.QuizzesHubChallenge?.onChange(applyChallengeState)
+    }).catch(() => {
+      setChallengeError('Could not open this challenge. Please return to Quizzes Hub.')
+    })
+
+    return () => {
+      cancelled = true
+      unsubscribe?.()
+    }
+  }, [isChallengeMode])
 
   const speak = (word: string) => {
     if (!('speechSynthesis' in window)) {
@@ -223,7 +335,21 @@ function App({ difficulty }: AppProps) {
         </div>
       </header>
 
-      {!isComplete ? (
+      {isChallengeMode && challengeState ? (
+        <section className="question-indicator" aria-label="Challenge status">
+          <strong>
+            Challenge {challengeState.status === 'active' ? challengeState.current_turn_index + 1 : ''}
+          </strong>
+          <div className="indicator-dots" aria-hidden="true">
+            {challengeState.players.map((player) => (
+              <span
+                className={player.user_id === challengeState.current_answering_user_id ? 'is-current' : player.wrong_count >= 3 ? 'is-wrong' : 'is-upcoming'}
+                key={player.user_id}
+              />
+            ))}
+          </div>
+        </section>
+      ) : !isComplete ? (
         <section className="question-indicator" aria-label="Question progress">
           <strong>
             {currentIndex + 1} / {questions.length}
@@ -247,7 +373,27 @@ function App({ difficulty }: AppProps) {
       ) : null}
 
       <AnimatePresence mode="wait">
-        {isComplete ? (
+        {isChallengeMode && (!current || challengeState?.status !== 'active') ? (
+          <motion.section
+            key="challenge-status"
+            className="results-view"
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -18 }}
+            transition={{ duration: 0.24 }}
+          >
+            <div className="results-hero">
+              <BadgeCheck size={36} aria-hidden="true" />
+              <p className="eyebrow">Challenge Mode</p>
+              <h2>{challengeState?.status === 'finished' ? getChallengeWinnerText(challengeState) : 'Waiting'}</h2>
+              <p>{challengeError || 'Waiting for the challenge session.'}</p>
+              <button className="primary-button" type="button" onClick={() => window.QuizzesHubChallenge?.openHub()}>
+                Back to Hub
+                <ArrowRight aria-hidden="true" size={20} />
+              </button>
+            </div>
+          </motion.section>
+        ) : isComplete ? (
           <motion.section
             key="results"
             className="results-view"
@@ -319,7 +465,7 @@ function App({ difficulty }: AppProps) {
                   return (
                     <button
                       className={className}
-                      disabled={Boolean(selected)}
+                      disabled={Boolean(selected) || (isChallengeMode && !window.QuizzesHubChallenge?.canAnswer())}
                       key={choice}
                       type="button"
                       onClick={() => chooseAnswer(choice)}
@@ -338,12 +484,16 @@ function App({ difficulty }: AppProps) {
                       <span>{current.item.word}</span>
                     </div>
                     <button className="primary-button" type="button" onClick={nextQuestion} ref={nextButtonRef}>
-                      Next
+                      {isChallengeMode ? 'Back to Hub' : 'Next'}
                       <ArrowRight aria-hidden="true" size={20} />
                     </button>
                   </>
                 ) : (
-                  <span aria-hidden="true" />
+                  <span>
+                    {isChallengeMode && !window.QuizzesHubChallenge?.canAnswer()
+                      ? getChallengeTurnText(challengeState)
+                      : challengeError || ''}
+                  </span>
                 )}
               </div>
             </section>
@@ -352,6 +502,16 @@ function App({ difficulty }: AppProps) {
       </AnimatePresence>
     </main>
   )
+}
+
+function getChallengeTurnText(state: ChallengeState | null) {
+  const currentPlayer = state?.players.find((player) => player.user_id === state.current_answering_user_id)
+  return currentPlayer ? `Waiting for ${currentPlayer.display_name}.` : 'Waiting for the other player.'
+}
+
+function getChallengeWinnerText(state: ChallengeState | null) {
+  const winner = state?.players.find((player) => player.user_id === state.winner_id)
+  return winner ? `${winner.display_name} wins` : 'Challenge finished'
 }
 
 export default App
