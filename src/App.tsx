@@ -53,8 +53,11 @@ type ChallengeState = {
   current_turn_index: number
   last_turn?: {
     answering_player_id: string
+    answer_text?: string | null
+    answered_at?: string
     is_correct: boolean
     question_key: string
+    turn_index: number
   } | null
   players: ChallengePlayer[]
   status: 'waiting' | 'active' | 'finished' | 'abandoned'
@@ -109,6 +112,22 @@ const clearSavedSession = (difficulty: Difficulty) => {
   }
 }
 
+const createChallengeQuestion = (key: string, selected?: string | null) => {
+  const question = createQuiz('all', {
+    choiceCount: 4,
+    preferredKeys: [key],
+    sessionSize: 1,
+  })[0]
+
+  if (!question || question.item.id !== key) return null
+
+  if (selected && selected !== question.item.word && !question.choices.includes(selected)) {
+    question.choices = [...question.choices.slice(0, -1), selected]
+  }
+
+  return question
+}
+
 function App({ difficulty }: AppProps) {
   const settings = difficultySettings[difficulty]
   const isChallengeMode = Boolean(window.QuizzesHubChallenge?.active)
@@ -119,6 +138,8 @@ function App({ difficulty }: AppProps) {
   const [answers, setAnswers] = useState<AnswerRecord[]>(() => savedSession?.answers ?? [])
   const [challengeState, setChallengeState] = useState<ChallengeState | null>(null)
   const [challengeError, setChallengeError] = useState<string | null>(null)
+  const challengeLastTurnIdRef = useRef<string | null>(null)
+  const challengeRevealTimerRef = useRef<number | null>(null)
   const answerLockedRef = useRef(false)
   const nextButtonRef = useRef<HTMLButtonElement | null>(null)
   const current = questions[currentIndex]
@@ -272,7 +293,7 @@ function App({ difficulty }: AppProps) {
     let unsubscribe: (() => void) | undefined
     let cancelled = false
 
-    const applyChallengeState = (state: ChallengeState) => {
+    const applyChallengeQuestion = (state: ChallengeState) => {
       if (cancelled) return
       setChallengeState(state)
       setChallengeError(null)
@@ -285,11 +306,7 @@ function App({ difficulty }: AppProps) {
         return
       }
 
-      const nextQuestion = createQuiz('all', {
-        choiceCount: 4,
-        preferredKeys: [state.current_question_key],
-        sessionSize: 1,
-      })[0]
+      const nextQuestion = createChallengeQuestion(state.current_question_key)
 
       if (!nextQuestion || nextQuestion.item.id !== state.current_question_key) {
         setQuestions([])
@@ -301,7 +318,46 @@ function App({ difficulty }: AppProps) {
       setQuestions([nextQuestion])
     }
 
+    const revealChallengeAnswer = (state: ChallengeState) => {
+      if (cancelled) return
+      const lastTurn = state.last_turn
+      const nextQuestion = lastTurn ? createChallengeQuestion(lastTurn.question_key, lastTurn.answer_text) : null
+      if (!lastTurn || !nextQuestion) {
+        applyChallengeQuestion(state)
+        return
+      }
+
+      setChallengeState(state)
+      setChallengeError(null)
+      setSelected(lastTurn.answer_text || '')
+      setAnswers([{ question: nextQuestion, selected: lastTurn.answer_text || '' }])
+      answerLockedRef.current = true
+      setCurrentIndex(0)
+      setQuestions([nextQuestion])
+
+      if (challengeRevealTimerRef.current) {
+        window.clearTimeout(challengeRevealTimerRef.current)
+      }
+      challengeRevealTimerRef.current = window.setTimeout(() => {
+        challengeRevealTimerRef.current = null
+        applyChallengeQuestion(state)
+      }, 2000)
+    }
+
+    const applyChallengeState = (state: ChallengeState) => {
+      const turnId = getChallengeTurnId(state.last_turn)
+      if (turnId && turnId !== challengeLastTurnIdRef.current) {
+        challengeLastTurnIdRef.current = turnId
+        revealChallengeAnswer(state)
+        return
+      }
+
+      if (challengeRevealTimerRef.current) return
+      applyChallengeQuestion(state)
+    }
+
     void window.QuizzesHubChallengeReady?.then((state) => {
+      challengeLastTurnIdRef.current = getChallengeTurnId(state.last_turn)
       applyChallengeState(state)
       unsubscribe = window.QuizzesHubChallenge?.onChange(applyChallengeState)
     }).catch(() => {
@@ -310,6 +366,7 @@ function App({ difficulty }: AppProps) {
 
     return () => {
       cancelled = true
+      if (challengeRevealTimerRef.current) window.clearTimeout(challengeRevealTimerRef.current)
       unsubscribe?.()
     }
   }, [isChallengeMode])
@@ -338,7 +395,7 @@ function App({ difficulty }: AppProps) {
       {isChallengeMode && challengeState ? (
         <section className="question-indicator" aria-label="Challenge status">
           <strong>
-            Challenge {challengeState.status === 'active' ? challengeState.current_turn_index + 1 : ''}
+            {getChallengeScoreText(challengeState) || `Challenge ${challengeState.status === 'active' ? challengeState.current_turn_index + 1 : ''}`}
           </strong>
           <div className="indicator-dots" aria-hidden="true">
             {challengeState.players.map((player) => (
@@ -480,7 +537,7 @@ function App({ difficulty }: AppProps) {
                 {selected ? (
                   <>
                     <div>
-                      <strong>{isCorrect ? 'Yes' : 'The word was'}</strong>
+                      <strong>{isCorrect ? 'Yes' : `Picked ${selected}. The word was`}</strong>
                       <span>{current.item.word}</span>
                     </div>
                     <button className="primary-button" type="button" onClick={nextQuestion} ref={nextButtonRef}>
@@ -511,7 +568,17 @@ function getChallengeTurnText(state: ChallengeState | null) {
 
 function getChallengeWinnerText(state: ChallengeState | null) {
   const winner = state?.players.find((player) => player.user_id === state.winner_id)
-  return winner ? `${winner.display_name} wins` : 'Challenge finished'
+  return winner ? `🎉 ${winner.display_name} wins!` : '🎉 Challenge finished'
+}
+
+function getChallengeScoreText(state: ChallengeState | null) {
+  if (!state?.players.length) return ''
+  return state.players.map((player) => `${player.display_name}: ${player.wrong_count}/3`).join(' · ')
+}
+
+function getChallengeTurnId(turn: ChallengeState['last_turn']) {
+  if (!turn) return null
+  return `${turn.turn_index}:${turn.answering_player_id}:${turn.answered_at || ''}`
 }
 
 export default App
