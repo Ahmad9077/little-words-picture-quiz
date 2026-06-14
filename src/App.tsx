@@ -112,12 +112,12 @@ const clearSavedSession = (difficulty: Difficulty) => {
   }
 }
 
-const createChallengeQuestion = (key: string, selected?: string | null) => {
-  const question = createQuiz('all', {
+const createChallengeQuestion = (key: string, turnIndex: number, selected?: string | null) => {
+  const question = withSeededRandom(`picture-reading:${key}:${turnIndex}`, () => createQuiz('all', {
     choiceCount: 4,
     preferredKeys: [key],
     sessionSize: 1,
-  })[0]
+  })[0])
 
   if (!question || question.item.id !== key) return null
 
@@ -306,7 +306,7 @@ function App({ difficulty }: AppProps) {
         return
       }
 
-      const nextQuestion = createChallengeQuestion(state.current_question_key)
+      const nextQuestion = createChallengeQuestion(state.current_question_key, state.current_turn_index)
 
       if (!nextQuestion || nextQuestion.item.id !== state.current_question_key) {
         setQuestions([])
@@ -321,7 +321,7 @@ function App({ difficulty }: AppProps) {
     const revealChallengeAnswer = (state: ChallengeState) => {
       if (cancelled) return
       const lastTurn = state.last_turn
-      const nextQuestion = lastTurn ? createChallengeQuestion(lastTurn.question_key, lastTurn.answer_text) : null
+      const nextQuestion = lastTurn ? createChallengeQuestion(lastTurn.question_key, lastTurn.turn_index, lastTurn.answer_text) : null
       if (!lastTurn || !nextQuestion) {
         applyChallengeQuestion(state)
         return
@@ -341,7 +341,7 @@ function App({ difficulty }: AppProps) {
       challengeRevealTimerRef.current = window.setTimeout(() => {
         challengeRevealTimerRef.current = null
         applyChallengeQuestion(state)
-      }, 2000)
+      }, 3000)
     }
 
     const applyChallengeState = (state: ChallengeState) => {
@@ -395,7 +395,7 @@ function App({ difficulty }: AppProps) {
       {isChallengeMode && challengeState ? (
         <section className="question-indicator" aria-label="Challenge status">
           <strong>
-            {getChallengeScoreText(challengeState) || `Challenge ${challengeState.status === 'active' ? challengeState.current_turn_index + 1 : ''}`}
+            {getChallengeHudText(challengeState) || `Challenge ${challengeState.status === 'active' ? challengeState.current_turn_index + 1 : ''}`}
           </strong>
           <div className="indicator-dots" aria-hidden="true">
             {challengeState.players.map((player) => (
@@ -576,9 +576,44 @@ function getChallengeScoreText(state: ChallengeState | null) {
   return state.players.map((player) => `${player.display_name}: ${player.wrong_count}/3`).join(' · ')
 }
 
+function getChallengeHudText(state: ChallengeState | null) {
+  if (!state) return ''
+  const currentPlayer = state.players.find((player) => player.user_id === state.current_answering_user_id)
+  const turn = currentPlayer
+    ? currentPlayer.user_id === window.QuizzesHubChallenge?.currentUserId
+      ? 'Your turn'
+      : `${currentPlayer.display_name}'s turn`
+    : 'Challenge'
+  return `${turn} · ${getChallengeScoreText(state)}`
+}
+
 function getChallengeTurnId(turn: ChallengeState['last_turn']) {
   if (!turn) return null
   return `${turn.turn_index}:${turn.answering_player_id}:${turn.answered_at || ''}`
+}
+
+function withSeededRandom<T>(seedText: string, callback: () => T) {
+  const originalRandom = Math.random
+  let seed = 2166136261
+
+  for (let index = 0; index < seedText.length; index += 1) {
+    seed ^= seedText.charCodeAt(index)
+    seed = Math.imul(seed, 16777619)
+  }
+
+  Math.random = () => {
+    seed += 0x6D2B79F5
+    let value = seed
+    value = Math.imul(value ^ value >>> 15, value | 1)
+    value ^= value + Math.imul(value ^ value >>> 7, value | 61)
+    return ((value ^ value >>> 14) >>> 0) / 4294967296
+  }
+
+  try {
+    return callback()
+  } finally {
+    Math.random = originalRandom
+  }
 }
 
 export default App
