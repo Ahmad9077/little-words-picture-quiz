@@ -149,7 +149,6 @@ function App({ difficulty }: AppProps) {
 
   const startNextRound = () => {
     if (isChallengeMode) {
-      window.QuizzesHubChallenge?.openHub()
       return
     }
 
@@ -189,7 +188,6 @@ function App({ difficulty }: AppProps) {
 
   const nextQuestion = () => {
     if (isChallengeMode) {
-      window.QuizzesHubChallenge?.openHub()
       return
     }
 
@@ -444,10 +442,6 @@ function App({ difficulty }: AppProps) {
               <p className="eyebrow">Challenge Mode</p>
               <h2>{challengeState?.status === 'finished' ? getChallengeWinnerText(challengeState) : 'Waiting'}</h2>
               <p>{challengeError || 'Waiting for the challenge session.'}</p>
-              <button className="primary-button" type="button" onClick={() => window.QuizzesHubChallenge?.openHub()}>
-                Back to Hub
-                <ArrowRight aria-hidden="true" size={20} />
-              </button>
             </div>
           </motion.section>
         ) : isComplete ? (
@@ -540,10 +534,12 @@ function App({ difficulty }: AppProps) {
                       <strong>{isCorrect ? 'Yes' : `Picked ${selected}. The word was`}</strong>
                       <span>{current.item.word}</span>
                     </div>
-                    <button className="primary-button" type="button" onClick={nextQuestion} ref={nextButtonRef}>
-                      {isChallengeMode ? 'Back to Hub' : 'Next'}
-                      <ArrowRight aria-hidden="true" size={20} />
-                    </button>
+                    {!isChallengeMode ? (
+                      <button className="primary-button" type="button" onClick={nextQuestion} ref={nextButtonRef}>
+                        Next
+                        <ArrowRight aria-hidden="true" size={20} />
+                      </button>
+                    ) : null}
                   </>
                 ) : (
                   <span>
